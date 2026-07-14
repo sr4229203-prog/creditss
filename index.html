@@ -5283,6 +5283,35 @@ function marksCommitAll(){
   const all=marksData.flatMap(d=>d.courses.map(c=>({...c,__src:d.label})));
   if(!all.length){toast('No parsed courses yet — drop grade cards into the slots first','error');return;}
   window.__marksSrc={};all.forEach(c=>{if(c.code&&!window.__marksSrc[c.code])window.__marksSrc[c.code]=c.__src;});
+  // Validate & map parsed courses against official catalog before import
+  try{
+    const catalog = catRows();
+    const byCode = {};
+    const byName = {};
+    catalog.forEach(r=>{const code=((r.cd||'')+'').toUpperCase().replace(/\s+/g,''); byCode[code]=r; const name=((r.nm||'')+'').toLowerCase().replace(/\s+/g,' ').trim(); if(name)byName[name]=r;});
+    let autoMapped=0;
+    all.forEach(c=>{
+      const rawCode=String(c.code||'').toUpperCase().trim();
+      const normCode=rawCode.replace(/[^A-Z0-9]/g,'');
+      const rawName=String(c.name||'').trim();
+      const normName=rawName.toLowerCase().replace(/\s+/g,' ').trim();
+      if(rawCode){
+        if(byCode[rawCode]){
+          const rr=byCode[rawCode]; if(rr.nm && rr.nm!==rawName){ c.name=rr.nm; autoMapped++; }
+        }else if(byCode[normCode]){ const rr=byCode[normCode]; c.code=normCode; if(rr.nm) c.name=rr.nm; autoMapped++; }
+      }else if(normName){
+        if(byName[normName]){ const rr=byName[normName]; c.code=(rr.cd||'').toUpperCase(); c.name=rr.nm; autoMapped++; }
+        else{
+          // try fuzzy match using simScore + codeBonus
+          let best=null;
+          catalog.forEach(r=>{const sc=Math.min(1,simScore(rawName,r.nm)+codeBonus(rawCode,r.cd)); if(!best||sc>best.sc)best={r,sc};});
+          if(best&&best.sc>=0.80){ c.code=(best.r.cd||'').toUpperCase(); c.name=best.r.nm; autoMapped++; }
+        }
+      }
+    });
+    if(autoMapped)toast('Auto-mapped '+autoMapped+' course(s) to catalog','success');
+  }catch(e){console.warn('Catalog mapping failed',e);}  
+
   const objs=all.map(c=>({Code:c.code,Name:c.name,Semester:c.sem||'',Credits:c.credits,Grade:c.grade,Term:c.term||''}));
   importMode=marksTarget;
   importRows=rowsFromObjects(objs);
