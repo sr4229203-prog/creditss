@@ -1957,83 +1957,16 @@ let student = {
   expectedGrad: '',
 };
 
-let subjects = [
-  {id:1,name:'Engineering Mathematics I',code:'MA101',credits:4,sem:1,type:'core',status:'completed',grade:'A'},
-  {id:2,name:'Engineering Physics',code:'PH101',credits:4,sem:1,type:'core',status:'completed',grade:'B+'},
-  {id:3,name:'Programming Fundamentals in C',code:'CS101',credits:4,sem:1,type:'core',status:'completed',grade:'A'},
-  {id:4,name:'Engineering Drawing & Graphics',code:'ME101',credits:3,sem:1,type:'theory',status:'completed',grade:'B+'},
-  {id:5,name:'English Communication',code:'HS101',credits:2,sem:1,type:'theory',status:'completed',grade:'A'},
-  {id:6,name:'Environmental Science',code:'ES101',credits:2,sem:1,type:'theory',status:'completed',grade:'A'},
-  {id:7,name:'Physics Lab',code:'PH191',credits:1,sem:1,type:'lab',status:'completed',grade:'S'},
-  {id:8,name:'C Programming Lab',code:'CS191',credits:1,sem:1,type:'lab',status:'completed',grade:'S'},
-  {id:9,name:'Engineering Mathematics II',code:'MA102',credits:4,sem:2,type:'core',status:'completed',grade:'B+'},
-  {id:10,name:'Engineering Chemistry',code:'CH101',credits:4,sem:2,type:'core',status:'completed',grade:'A'},
-  {id:11,name:'Basic Electronics',code:'EC101',credits:4,sem:2,type:'core',status:'completed',grade:'B+'},
-  {id:12,name:'Introduction to Computing',code:'CS102',credits:3,sem:2,type:'core',status:'completed',grade:'A'},
-  {id:13,name:'Professional Ethics',code:'HS102',credits:2,sem:2,type:'theory',status:'completed',grade:'A'},
-  {id:14,name:'Workshop Technology',code:'ME102',credits:2,sem:2,type:'lab',status:'completed',grade:'S'},
-  {id:15,name:'Electronics Lab',code:'EC191',credits:1,sem:2,type:'lab',status:'completed',grade:'S'},
-  {id:16,name:'Chemistry Lab',code:'CH191',credits:1,sem:2,type:'lab',status:'completed',grade:'S'},
-  {id:17,name:'Data Structures',code:'CS201',credits:4,sem:3,type:'core',status:'completed',grade:'A'},
-  {id:18,name:'Discrete Mathematics',code:'MA201',credits:4,sem:3,type:'core',status:'completed',grade:'B+'},
-  {id:19,name:'Digital Logic Design',code:'EC201',credits:4,sem:3,type:'core',status:'completed',grade:'A'},
-  {id:20,name:'Object-Oriented Programming (Java)',code:'CS202',credits:4,sem:3,type:'core',status:'completed',grade:'A'},
-  {id:21,name:'Mathematics III (Transform Techniques)',code:'MA202',credits:4,sem:3,type:'core',status:'failed',grade:'F'},
-  {id:22,name:'Data Structures Lab',code:'CS291',credits:2,sem:3,type:'lab',status:'completed',grade:'S'},
-  {id:23,name:'Java Programming Lab',code:'CS292',credits:1,sem:3,type:'lab',status:'completed',grade:'S'},
-  {id:24,name:'Computer Organization & Architecture',code:'CS203',credits:4,sem:4,type:'core',status:'completed',grade:'B+'},
-  {id:25,name:'Operating Systems',code:'CS204',credits:4,sem:4,type:'core',status:'failed',grade:'F'},
-  {id:26,name:'Database Management Systems',code:'CS205',credits:4,sem:4,type:'core',status:'completed',grade:'A'},
-  {id:27,name:'Theory of Computation',code:'CS206',credits:3,sem:4,type:'core',status:'completed',grade:'B+'},
-  {id:28,name:'Economics for Engineers',code:'HS201',credits:2,sem:4,type:'theory',status:'completed',grade:'A'},
-  {id:29,name:'Probability & Statistics',code:'MA203',credits:3,sem:4,type:'core',status:'completed',grade:'B+'},
-  {id:30,name:'DBMS Lab',code:'CS293',credits:2,sem:4,type:'lab',status:'completed',grade:'S'},
-  {id:31,name:'OS Lab',code:'CS294',credits:1,sem:4,type:'lab',status:'completed',grade:'S'},
-  {id:32,name:'Algorithm Design & Analysis',code:'CS301',credits:4,sem:5,type:'core',status:'pending',grade:''},
-  {id:33,name:'Computer Networks',code:'CS302',credits:4,sem:5,type:'core',status:'pending',grade:''},
-  {id:34,name:'Software Engineering',code:'CS303',credits:4,sem:5,type:'core',status:'pending',grade:''},
-  {id:35,name:'Machine Learning',code:'CS304',credits:4,sem:5,type:'elective',status:'pending',grade:''},
-  {id:36,name:'Microprocessors & Embedded Systems',code:'CS305',credits:3,sem:5,type:'core',status:'pending',grade:''},
-  {id:37,name:'Networks Lab',code:'CS391',credits:2,sem:5,type:'lab',status:'pending',grade:''},
-  {id:38,name:'ML Lab',code:'CS392',credits:1,sem:5,type:'lab',status:'pending',grade:''},
-  {id:39,name:'Mini Project I',code:'CS393',credits:2,sem:5,type:'project',status:'pending',grade:''},
-  {id:40,name:'Compiler Design',code:'CS401',credits:4,sem:6,type:'core',status:'registered',grade:''},
-  {id:41,name:'Cryptography & Network Security',code:'CS402',credits:4,sem:6,type:'core',status:'registered',grade:''},
-  {id:42,name:'Cloud Computing',code:'CS403',credits:3,sem:6,type:'elective',status:'registered',grade:''},
-  {id:43,name:'Artificial Intelligence',code:'CS404',credits:4,sem:6,type:'core',status:'registered',grade:''},
-  {id:44,name:'Human Computer Interaction',code:'CS405',credits:3,sem:6,type:'elective',status:'registered',grade:''},
-  {id:45,name:'Management & Entrepreneurship',code:'HS301',credits:2,sem:6,type:'theory',status:'registered',grade:''},
-  {id:46,name:'Security Lab',code:'CS491',credits:2,sem:6,type:'lab',status:'registered',grade:''},
-  {id:47,name:'Mini Project II',code:'CS492',credits:2,sem:6,type:'project',status:'registered',grade:''},
-  {id:48,name:'Deep Learning & Neural Networks',code:'CS501',credits:4,sem:7,type:'elective',status:'registered',grade:''},
-  {id:49,name:'Distributed Systems',code:'CS502',credits:4,sem:7,type:'core',status:'registered',grade:''},
-  {id:50,name:'Internet of Things',code:'CS503',credits:3,sem:7,type:'elective',status:'registered',grade:''},
-  {id:51,name:'Open Elective I',code:'OE501',credits:3,sem:7,type:'elective',status:'registered',grade:''},
-  {id:52,name:'Technical Seminar',code:'CS504',credits:2,sem:7,type:'theory',status:'registered',grade:''},
-  {id:53,name:'Major Project Part I',code:'CS591',credits:6,sem:7,type:'project',status:'registered',grade:''},
-  {id:54,name:'Big Data Analytics',code:'CS601',credits:4,sem:8,type:'elective',status:'pending',grade:''},
-  {id:55,name:'Open Elective II',code:'OE601',credits:3,sem:8,type:'elective',status:'pending',grade:''},
-  {id:56,name:'Open Elective III',code:'OE602',credits:3,sem:8,type:'elective',status:'pending',grade:''},
-  {id:57,name:'Industrial Internship',code:'CS602',credits:4,sem:8,type:'project',status:'pending',grade:''},
-  {id:58,name:'Major Project Part II',code:'CS691',credits:8,sem:8,type:'project',status:'pending',grade:''},
-  {id:59,name:'Project Viva & Seminar',code:'CS692',credits:2,sem:8,type:'project',status:'pending',grade:''},
-];
-let nextId = 60;
+let subjects = [];
+let nextId = 1;
 let activeSem = 1;
 
-// ── BACKLOG ATTEMPT HISTORY ───────────────────────────────────────────────────
-// Map of subjectId -> array of attempt records {term, grade, notes, date}
-let attemptHistory = {
-  21: [{term:'Regular Sem 3 Exam',grade:'F',notes:'First attempt',date:'2024-12-10'}],
-  25: [{term:'Regular Sem 4 Exam',grade:'F',notes:'First attempt',date:'2025-05-15'}],
-};
+// BACKLOG / ATTEMPT HISTORY
+let attemptHistory = {};
 
-// ── COURSE EQUIVALENCE DATA ───────────────────────────────────────────────────
-let equivalences = [
-  {id:1,oldName:'Object Oriented Programming',oldCode:'CS202',oldCredits:4,newName:'OOP using Java',newCode:'CS202R',newCredits:4,type:'renamed',appliesTo:'2022–26 → 2023–27 curriculum',remarks:'Same syllabus, code revised under new scheme'},
-  {id:2,oldName:'Numerical Methods',oldCode:'MA204',oldCredits:3,newName:'Mathematics III (Transform Techniques)',newCode:'MA202',newCredits:4,type:'partial',appliesTo:'2021–25 → 2022–26 curriculum',remarks:'1 credit gap — extra assignment required to bridge credit difference'},
-];
-let nextEquivId = 3;
+// COURSE EQUIVALENCE DATA
+let equivalences = [];
+let nextEquivId = 1;
 let annexEditMode = false;
 let annexRightSlots = []; // {id,sem,linkedEqId,newName,newCode,newL,newT,newP,newCredits,remarks}
 let nextRightSlotId = 1;
