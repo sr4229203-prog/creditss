@@ -6082,11 +6082,16 @@ function openProfileModal(){renderProfileList();document.getElementById('profile
 function closeProfileModal(){const el=document.getElementById('profileOverlay');if(el)el.classList.remove('open');}
 function freshDefaults(){
   const d=JSON.parse(JSON.stringify(DEFAULTS));
-  student=d.student;settings=d.settings;
-  subjects=d.subjects.map(migrateSubject);
-  equivalences=d.equivalences;attemptHistory=d.attemptHistory;oldPrcPool=[];activityLog=[];
-  nextId=Math.max(0,...subjects.map(s=>s.id))+1;
-  nextEquivId=Math.max(0,...equivalences.map(x=>x.id))+1;nextChipId=1;
+  student=d.student; settings=d.settings;
+  // start with an empty register for a truly fresh profile (no sample subjects)
+  subjects = [];
+  equivalences = [];
+  attemptHistory = {};
+  oldPrcPool = [];
+  activityLog = [];
+  nextId = 1;
+  nextEquivId = 1;
+  nextChipId = 1;
 }
 function switchProfile(id){
   if(!profileIndex.list.some(p=>p.id===id))return;
