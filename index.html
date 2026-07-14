@@ -2031,6 +2031,8 @@ let equivalences = [
 ];
 let nextEquivId = 3;
 let annexEditMode = false;
+let annexRightSlots = []; // {id,sem,linkedEqId,newName,newCode,newL,newT,newP,newCredits,remarks}
+let nextRightSlotId = 1;
 
 // ── SETTINGS ──────────────────────────────────────────────────────────────────
 let settings = {startYear:2024,duration:4,degree:'B.Tech',branch:'CSE',totalCredits:160,gradeScale:'10',maxBacklogs:5,maxAttempts:4,maxSemCredits:26,classDist:7.5,classFirst:6,classSecond:5,pctMult:10,pctOff:0,maxDurationYears:8,readmitSem:5,theme:'light',baskets:{SC:61,PC:60,DE:30,OE:9}};
@@ -2063,7 +2065,7 @@ function migrateSubject(s){
 }
 let activityLog=[];
 function logAction(icon,msg){activityLog.unshift({t:Date.now(),icon,msg});if(activityLog.length>250)activityLog.length=250;}
-function snapshotState(){return{v:4,student,settings,subjects,equivalences,attemptHistory,oldPrcPool,activityLog,nextId,nextEquivId,nextChipId};}
+function snapshotState(){return{v:4,student,settings,subjects,equivalences,attemptHistory,oldPrcPool,activityLog,nextId,nextEquivId,nextChipId,annexRightSlots,nextRightSlotId};}
 let undoStack=[],redoStack=[],__lastSnap=null,__restoring=false;
 function updateUndoButtons(){
   const u=document.getElementById('undoBtn'),r=document.getElementById('redoBtn');
@@ -2099,6 +2101,8 @@ function applySnapshot(p){
   activityLog=p.activityLog||[];
   nextId=p.nextId||(Math.max(0,...subjects.map(s=>s.id||0))+1);
   nextEquivId=p.nextEquivId||(Math.max(0,...equivalences.map(e=>e.id||0))+1);
+  annexRightSlots=p.annexRightSlots||[];
+  nextRightSlotId=p.nextRightSlotId||1;
   nextChipId=p.nextChipId||(Math.max(0,...oldPrcPool.map(c=>c.id||0))+1);
   applyTheme(settings.theme);
   applySettingsToUI();
@@ -4003,6 +4007,12 @@ function eqForSubject(s){
   return equivalences.find(e=>e.subjectId===s.id)||equivalences.find(e=>e.oldCode&&e.oldCode===s.code)||null;
 }
 function chipIdForEquiv(eid){const c=oldPrcPool.find(x=>x.mappedEq===eid);return c?c.id:null;}
+
+function addRightSlot(sem){ annexRightSlots.push({id:nextRightSlotId++,sem:sem,linkedEqId:null,newName:'(slot)',newCode:'',newL:0,newT:0,newP:0,newCredits:0,remarks:''}); saveState(); renderAnnexureForm(); toast('Added right-side slot for Sem '+sem,'success'); }
+function annexDropOnSlot(slotId){ if(dragChipId===null) return; const c=oldPrcPool.find(x=>x.id===dragChipId); if(!c) return; const sl=annexRightSlots.find(s=>s.id===slotId); if(!sl) return; // create equivalence linked to this slot
+  const eq={id:nextEquivId++, subjectId:null, oldName:c.name, oldCode:c.code, oldL:c.L, oldT:c.T, oldP:c.P, oldCredits:c.C, oldGrade:c.grade||'', term:c.term||'', newName:sl.newName||'(slot)', newCode:sl.newCode||'', newL:sl.newL||0, newT:sl.newT||0, newP:sl.newP||0, newCredits:sl.newCredits||0, type:'exact', appliesTo:'', remarks:sl.remarks||''};
+  equivalences.push(eq); c.mappedEq=eq.id; sl.linkedEqId=eq.id; dragChipId=null; renderEquivBoard(); renderEquivKPI(); renderAnnexureForm(); saveState(); toast('Mapped '+(c.code||c.name)+' → slot','success'); }
+function removeRightSlot(id){ const sl=annexRightSlots.find(s=>s.id===id); if(!sl) return; if(sl.linkedEqId){ removeEquivalenceById(sl.linkedEqId); } annexRightSlots=annexRightSlots.filter(s=>s.id!==id); saveState(); renderAnnexureForm(); toast('Removed right-side slot','info'); }
 function mappingInfoForSubject(s,eq){
   if(eq){
     return {code:eq.oldCode||'',name:eq.oldName||'',L:eq.oldL??s.L,T:eq.oldT??s.T,P:eq.oldP??s.P,C:eq.oldCredits??s.credits,basket:eq.basket||s.basket||'',grade:eq.oldGrade||'',term:eq.term||''};
@@ -5652,8 +5662,18 @@ function renderAnnexSources(){
   // parsed marks quick-add
   const parsedMarks=document.createElement('div'); parsedMarks.style.padding='10px'; parsedMarks.style.borderTop='1px dashed var(--border)';
   const md={}; if(typeof marksData!=='undefined'&&Array.isArray(marksData)){marksData.forEach(slot=>{(slot.courses||[]).forEach(c=>{const s=c.sem||'Unk'; (md[s]=md[s]||[]).push(c);});});}
+  // multi-select support for parsed marks bulk-add
+  window.parsedMarksSelection = window.parsedMarksSelection||{};
+  window.toggleParsedSelect = function(key){ if(window.parsedMarksSelection[key]) delete window.parsedMarksSelection[key]; else window.parsedMarksSelection[key]=true; renderAnnexureForm(); };
+  window.addSelectedParsedToPRC = function(){ const keys=Object.keys(window.parsedMarksSelection); if(!keys.length) return toast('No parsed rows selected','error'); let added=0; keys.forEach(k=>{ const parts=k.split('::::'); const sem=parts[0]; const code=parts[1]; const name=parts[2]; if(name) { addParsedCourseToRegister({code:code,name:name,sem:+sem||activeSem,credits:4}); added++; } }); window.parsedMarksSelection={}; saveState(); renderAll(); toast('Added '+added+' parsed course(s)','success'); };
   const semKeys=Object.keys(md).sort((a,b)=>{if(a==='Unk')return 1;if(b==='Unk')return -1;return (+a)-(+b);});
-  if(semKeys.length){ semKeys.forEach(sk=>{ const h=document.createElement('div'); h.style.fontWeight='700'; h.style.margin='6px 0 4px'; h.textContent=(sk==='Unk'?'Unassigned Semester':'Semester '+sk); parsedMarks.appendChild(h); md[sk].forEach(c=>{ const row=document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; row.style.alignItems='center'; row.style.padding='6px 0'; row.innerHTML=`<div><div style="font-weight:700">${c.code||''}</div><div style="font-size:12px;color:var(--ink4)">${c.name||''}</div></div>`; const btn=document.createElement('button'); btn.className='btn btn-sm'; btn.textContent='Add to PRC'; btn.onclick=()=>addParsedCourseToRegister({code:c.code||'',name:c.name||'',sem:+sk||activeSem,credits:c.credits||4}); row.appendChild(btn); parsedMarks.appendChild(row); }); }); } else { parsedMarks.innerHTML='<div style="font-size:12px;color:var(--ink4)">No parsed courses available — upload marks to see parsed rows here.</div>'; }
+  if(semKeys.length){
+    const controlRow=document.createElement('div'); controlRow.style.display='flex'; controlRow.style.justifyContent='flex-end'; controlRow.style.gap='8px'; controlRow.style.marginBottom='6px';
+    const addSel=document.createElement('button'); addSel.className='btn btn-primary btn-sm'; addSel.textContent='Add selected to PRC'; addSel.onclick=()=>addSelectedParsedToPRC(); controlRow.appendChild(addSel);
+    parsedMarks.appendChild(controlRow);
+    semKeys.forEach(sk=>{ const h=document.createElement('div'); h.style.fontWeight='700'; h.style.margin='6px 0 4px'; h.textContent=(sk==='Unk'?'Unassigned Semester':'Semester '+sk); parsedMarks.appendChild(h); md[sk].forEach(c=>{ const key=`${sk}::::${c.code||''}::::${(c.name||'').replace(/\"/g,'')}`; const row=document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; row.style.alignItems='center'; row.style.padding='6px 0'; const left=document.createElement('div'); left.style.display='flex'; left.style.alignItems='center'; left.style.gap='8px'; const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=!!window.parsedMarksSelection[key]; cb.onchange=(()=>window.toggleParsedSelect(key)); left.appendChild(cb); const info=document.createElement('div'); info.innerHTML=`<div style="font-weight:700">${c.code||''}</div><div style="font-size:12px;color:var(--ink4)">${c.name||''}</div>`; left.appendChild(info); row.appendChild(left);
+        const btn=document.createElement('button'); btn.className='btn btn-sm'; btn.textContent='Add to PRC'; btn.onclick=()=>addParsedCourseToRegister({code:c.code||'',name:c.name||'',sem:+sk||activeSem,credits:c.credits||4}); row.appendChild(btn); parsedMarks.appendChild(row); }); });
+  } else { parsedMarks.innerHTML='<div style="font-size:12px;color:var(--ink4)">No parsed courses available — upload marks to see parsed rows here.</div>'; }
   parsed.appendChild(parsedMarks);
   box.innerHTML=''; box.appendChild(parsed);
 }
@@ -5671,7 +5691,7 @@ function renderAnnexureForm(){
   for(let n=1;n<Math.min(rMax,9);n++){
     const list=subjects.filter(s=>s.sem===n&&!s.additional).sort((a,b)=>(a.code||'').localeCompare(b.code||''));
     if(!list.length)continue;
-    t1+=`<tr class="sect"><td colspan="15">Semester: ${n}</td></tr>`;
+    t1+=`<tr class="sect"><td colspan="15">Semester: ${n} <button class="btn btn-sm btn-secondary" style="margin-left:12px" onclick="addRightSlot(${n})">＋ Add right-side slot</button></td></tr>`;
     list.forEach(s=>{
       const eq=eqForSubject(s);
       const att=!!(s.grade||s.term);
@@ -5682,7 +5702,7 @@ function renderAnnexureForm(){
       if(s.status==='completed')t1sumEarned+=Number(s.credits)||0;
       const drop=`ondragover="if(dragChipId!==null||catDragIdx!=null){event.preventDefault();this.classList.add('rt-dragover');}" ondragleave="this.classList.remove('rt-dragover')" ondrop="this.classList.remove('rt-dragover');annexDrop(${s.id})"`;
       t1+=`<tr ${drop} draggable="true" ondragstart="dragSubjectId=${s.id};event.dataTransfer.effectAllowed='move'" title="Drag to 🗑 to remove its mapping">
-        <td class="mono">${L.code||'—'}</td><td>${L.name} <button class="chip-x" title="Edit new course" onclick="editSubject(${s.id})">✎</button></td>
+        <td class="mono">${L.code||'—'}</td><td>${L.name} <button class="chip-x" title="Edit new course" onclick="editSubject(${s.id})">✎</button> ${s._placeholder?`<button class="chip-x" title="Remove placeholder" onclick="deletePlaceholder(${s.id})">✕</button>`:''}</td>
         <td class="mono">${cell(L.l)||0}</td><td class="mono">${cell(L.t)||0}</td><td class="mono">${cell(L.p)||0}</td><td class="mono"><b>${L.c}</b></td><td><b>${L.bk||''}</b></td>
         ${ (eq||att)
           ? `<td class="mono">${s.code||'—'}</td><td>${s.name}${eq?` <button class="chip-x" title="Edit old course" onclick="openChipModal(${chipIdForEquiv(eq.id)||'null'})">✎</button> <button class="chip-x" title="Remove mapping" onclick="removeEquivalenceById(${eq.id})">✕</button>`:''}</td>
@@ -5690,6 +5710,21 @@ function renderAnnexureForm(){
              <td>${isClearable(s)?`<b style="color:#8b1a1a">${(s.status==='failed'?'FAIL':s.status==='np'?'NP':s.status==='rc'?'RC':'I')}</b>`:(s.term||'—')}</td>`
           : `<td colspan="8" class="p-slot">⇠ drop the equivalent old-PRC course here</td>`}
       </tr>`;
+    });
+    // render any right-side placeholder slots for this semester
+    const slots=annexRightSlots.filter(sl=>sl.sem===n);
+    slots.forEach(sl=>{
+      const eq=sl.linkedEqId?equivalences.find(e=>e.id===sl.linkedEqId):null;
+      if(eq){
+        t1+=`<tr><td colspan="7" class="p-slot">&nbsp;</td>
+          <td class="mono">${eq.oldCode||'—'}</td><td>${eq.oldName} <button class="chip-x" title="Edit old course" onclick="openChipModal(${chipIdForEquiv(eq.id)||'null'})">✎</button> <button class="chip-x" title="Remove slot mapping" onclick="removeRightSlot(${sl.id})">✕</button></td>
+          <td class="mono">${eq.oldL||0}</td><td class="mono">${eq.oldT||0}</td><td class="mono">${eq.oldP||0}</td><td class="mono"><b>${eq.oldCredits||0}</b></td><td><b>${eq.basket||''}</b></td>
+          <td></td></tr>`;
+      }else{
+        t1+=`<tr ondragover="if(dragChipId!==null||catDragIdx!=null){event.preventDefault();this.classList.add('rt-dragover');}" ondragleave="this.classList.remove('rt-dragover')" ondrop="this.classList.remove('rt-dragover');annexDropOnSlot(${sl.id})">
+          <td colspan="7" class="p-slot">(Right-side slot) ⇠ drop an old-PRC course here to map to this placeholder</td>
+          <td colspan="8" style="text-align:right"><button class="btn btn-sm btn-secondary" onclick="removeRightSlot(${sl.id})">Remove slot</button></td></tr>`;
+      }
     });
   }
   // Table III: exempted rows + upcoming drop slots
@@ -5795,6 +5830,10 @@ function renderAnnexureForm(){
   if(catPanel)catPanel.style.display=annexCatOpen?'flex':'none';
   renderAnnexSources();
   if(annexCatOpen)setTimeout(renderAnnexCatList,0);
+  // Edit mode banner
+  if(annexEditMode){
+    const b=document.createElement('div'); b.style.background='#ffefef'; b.style.border='1px solid #f2c2c2'; b.style.padding='8px'; b.style.marginBottom='8px'; b.style.color='#881a1a'; b.style.fontWeight=700; b.textContent='EDIT MODE — Changes are live. Toggle Edit Annexure to exit.'; paper.parentNode.insertBefore(b,paper); setTimeout(()=>b.scrollIntoView({behavior:'smooth'}),80);
+  }
   if(tray){
     const unF=poolFilterChips(un);
     tray.innerHTML=`<span style="font-size:11px;color:var(--ink3);font-weight:600">🧲 Old-PRC courses (${unF.length}${unF.length!==un.length?' of '+un.length:''} unmapped)</span>
@@ -5916,7 +5955,8 @@ function fixOrphanRefs(){
 }
 function toggleAnnexEdit(){ annexEditMode = !annexEditMode; renderAnnexureForm(); }
 function addAnnexureNewRowPrompt(){ const v=prompt('Semester number for new PRC row (1-8):','1'); if(v===null) return; const n=parseInt(v); if(!n||n<1||n>8) return alert('Enter a valid semester 1-8'); addAnnexureNewRow(n); }
-function addAnnexureNewRow(sem){ const obj={id:nextId++, name:'(new course)', code:'', credits:0, sem:sem, type:'core', status:'pending', grade:'', basket:'PC', L:'',T:'',P:'',additional:false}; subjects.push(obj); saveState(); renderAll(); toast('Added new PRC row for Sem '+sem,'success'); }
+function addAnnexureNewRow(sem){ const obj={id:nextId++, name:'(new course)', code:'', credits:0, sem:sem, type:'core', status:'pending', grade:'', basket:'PC', L:'',T:'',P:'',additional:false,_placeholder:true}; subjects.push(obj); saveState(); renderAll(); toast('Added new PRC placeholder row for Sem '+sem,'success'); }
+function deletePlaceholder(id){ const s=subjects.find(x=>x.id===id); if(!s) return; if(!s._placeholder){ return deleteSubjectById(id); } if(!confirm('Remove this placeholder row?')) return; subjects=subjects.filter(x=>x.id!==id); renderAll(); saveState(); toast('Placeholder row removed','info'); }
 function runHealthCheck(){
   const box=document.getElementById('healthBody');if(!box)return;
   const issues=[];
