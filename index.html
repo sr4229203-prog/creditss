@@ -3849,6 +3849,12 @@ function deleteChip(id){
   oldPrcPool=oldPrcPool.filter(x=>x.id!==id);
   renderEquivBoard();saveState();
 }
+function canMapChipByMarks(c){
+  if(!c)return false;
+  const g=String(c.grade||'').trim().toUpperCase();
+  if(!g)return true;
+  return !['F','NP','RC','I','NE','NC','U','W','AB','X'].includes(g);
+}
 function seedPoolFromCompleted(){
   const existing=new Set(oldPrcPool.map(c=>c.code||('~'+c.name)));
   let n=0;
@@ -3951,8 +3957,12 @@ function chipDrop(subjectId){
   if(!chip||chip.mappedEq)return;
   const s=subjects.find(x=>x.id===subjectId);if(!s)return;
   if(equivalences.some(e=>e.subjectId===s.id)){toast(`${s.code||s.name} is already mapped — remove that mapping first`,'error');return;}
+  if(!canMapChipByMarks(chip)){
+    toast(`${chip.code||chip.name} has grade ${chip.grade||'—'} — keep it in Table II / Table V instead of mapping it as a cleared PRC equivalent.`,'info');
+    return;
+  }
   const eq={id:nextEquivId++,subjectId:s.id,
-    oldName:chip.name,oldCode:chip.code,oldL:chip.L,oldT:chip.T,oldP:chip.P,oldCredits:chip.C,
+    oldName:chip.name,oldCode:chip.code,oldL:chip.L,oldT:chip.T,oldP:chip.P,oldCredits:chip.C,oldGrade:chip.grade||'',
     newName:s.name,newCode:s.code,newL:s.L,newT:s.T,newP:s.P,newCredits:s.credits,
     basket:s.basket,term:chip.term,
     type:(chip.C===s.credits?'exact':'partial'),
@@ -3991,6 +4001,12 @@ function catTag(cat){const m=CAT_META[cat];return`<span class="bk" style="backgr
 function eqForSubject(s){
   return equivalences.find(e=>e.subjectId===s.id)||equivalences.find(e=>e.oldCode&&e.oldCode===s.code)||null;
 }
+function mappingInfoForSubject(s,eq){
+  if(eq){
+    return {code:eq.oldCode||'',name:eq.oldName||'',L:eq.oldL??s.L,T:eq.oldT??s.T,P:eq.oldP??s.P,C:eq.oldCredits??s.credits,basket:eq.basket||s.basket||'',grade:eq.oldGrade||'',term:eq.term||''};
+  }
+  return {code:s.code||'',name:s.name||'',L:s.L,T:s.T,P:s.P,C:s.credits,basket:s.basket||'',grade:s.grade||'',term:s.term||''};
+}
 function renderEquivReport(){
   const wrap=document.getElementById('reportWrap');if(!wrap)return;
   const r=settings.readmitSem||0;
@@ -4018,17 +4034,20 @@ function renderEquivReport(){
       const attended=!!(s.grade||s.term);
       const left=eq?{code:eq.newCode,name:eq.newName,L:eq.newL,T:eq.newT,P:eq.newP,C:eq.newCredits,bk:eq.basket||s.basket}
                    :{code:s.code,name:s.name,L:s.L,T:s.T,P:s.P,C:s.credits,bk:s.basket};
+      const right=mappingInfoForSubject(s,eq);
       const hasRight=eq||attended;
       if(hasRight)t1mapped++;
       t1sumNew+=Number(left.C)||0;
       if(s.status==='completed')t1sumEarned+=Number(s.credits)||0;
       const tag=(isClearable(s))?catTag('T2'):(!hasRight?catTag('T5'):`<span class="bk" style="background:var(--green-bg);color:var(--green);border-color:transparent">✓</span>`);
+      const rightGrade=(right.grade||'').toUpperCase();
+      const rightColor=(rightGrade==='F'||rightGrade==='NP'||rightGrade==='RC'||rightGrade==='I'||rightGrade==='NE'||rightGrade==='NC')?'var(--red)':'var(--green)';
       t1rows+=`<tr ondragover="if(dragChipId!==null){event.preventDefault();this.classList.add('rt-dragover');}" ondragleave="this.classList.remove('rt-dragover')" ondrop="this.classList.remove('rt-dragover');chipDrop(${s.id})" style="${(isClearable(s))?'background:'+CAT_META.T2[2]:(!hasRight?'background:'+CAT_META.T5[2]:'')}">
         <td class="mono">${left.code||'—'}</td><td>${left.name}</td><td class="mono">${ltpcStr(left.L,left.T,left.P,left.C)}</td><td>${basketChip(left.bk)}</td>
         <td style="text-align:center;color:var(--ink4)">${hasRight?'⇐':''}</td>
-        ${hasRight?`<td class="mono">${s.code||'—'}</td><td>${s.name}</td><td class="mono">${ltpcStr(s.L,s.T,s.P,s.credits)}</td><td>${basketChip(s.basket)}</td>
-          <td class="mono" style="font-weight:600;color:${s.status==='completed'?'var(--green)':'var(--red)'}">${s.grade||'—'}</td>
-          <td style="font-size:10.5px">${isClearable(s)?`<b style="color:var(--red)">${(s.status==='failed'?'FAIL':s.status==='np'?'NP':s.status==='rc'?'RC':'I')}</b>`:(s.term||'—')}${eq?` <button class="chip-x" style="margin-left:4px" title="Remove this mapping" onclick="removeEquivalenceById(${eq.id})">✕</button>`:''}</td>`
+        ${hasRight?`<td class="mono">${right.code||'—'}</td><td>${right.name}</td><td class="mono">${ltpcStr(right.L,right.T,right.P,right.C)}</td><td>${basketChip(right.basket)}</td>
+          <td class="mono" style="font-weight:600;color:${rightColor}">${right.grade||'—'}</td>
+          <td style="font-size:10.5px">${(right.term||'—')}${eq?` <button class="chip-x" style="margin-left:4px" title="Remove this mapping" onclick="removeEquivalenceById(${eq.id})">✕</button>`:''}</td>`
         :`<td colspan="6" style="color:var(--ink4);font-style:italic">— not mapped —</td>`}
         <td>${tag}</td></tr>`;
     });
@@ -4136,7 +4155,8 @@ function exportCommitteeExcel(){
       subjects.filter(s=>s.sem===n&&!s.additional).sort((a,b)=>(a.code||'').localeCompare(b.code||'')).forEach(s=>{
         const eq=eqForSubject(s);const attended=!!(s.grade||s.term);
         const L=eq?[eq.newCode||'',eq.newName,ltpcStr(eq.newL,eq.newT,eq.newP,eq.newCredits),eq.basket||s.basket||'']:[s.code||'',s.name,ltpcStr(s.L,s.T,s.P,s.credits),s.basket||''];
-        const R=(eq||attended)?[s.code||'',s.name,ltpcStr(s.L,s.T,s.P,s.credits),s.grade||'',(s.status==='failed'?'FAIL':s.status==='np'?'NP':(s.term||''))]:['','— not mapped —','','',''];
+        const right=mappingInfoForSubject(s,eq);
+        const R=(eq||attended)?[right.code||'',right.name||'',ltpcStr(right.L,right.T,right.P,right.C),right.grade||'',right.term||'']:[right.code||'',right.name||'','', '', ''];
         t1.push([n,...L,...R,(isClearable(s))?'Table II':((eq||attended)?'Mapped':'Table V')]);
       });
     }
@@ -4705,7 +4725,7 @@ function libApplyToCurrent(silent){
   let made=0;
   chips.forEach(c=>{
     const r=equivLibrary.find(x=>libKey(x.oldCode,x.oldName)===libKey(c.code,c.name));
-    if(!r)return;
+    if(!r||!canMapChipByMarks(c))return;
     let s=subjects.find(x=>!x.additional&&!equivalences.some(e=>e.subjectId===x.id)&&((r.newCode&&(x.code||'').toUpperCase()===r.newCode.toUpperCase())||(x.name||'').trim().toLowerCase()===(r.newName||'').trim().toLowerCase()));
     if(!s)return;
     const eq={id:nextEquivId++,subjectId:s.id,oldName:c.name,oldCode:c.code,oldL:c.L,oldT:c.T,oldP:c.P,oldCredits:c.C,
@@ -5010,8 +5030,8 @@ function closeSuggest(){const el=document.getElementById('suggestOverlay');if(el
 
 function smartApply(chipId,subId){
   const c=oldPrcPool.find(x=>x.id===chipId),s=subjects.find(x=>x.id===subId);
-  if(!c||!s||c.mappedEq)return false;
-  const eq={id:nextEquivId++,subjectId:s.id,oldName:c.name,oldCode:c.code,oldL:c.L,oldT:c.T,oldP:c.P,oldCredits:c.C,
+  if(!c||!s||c.mappedEq||!canMapChipByMarks(c))return false;
+  const eq={id:nextEquivId++,subjectId:s.id,oldName:c.name,oldCode:c.code,oldL:c.L,oldT:c.T,oldP:c.P,oldCredits:c.C,oldGrade:c.grade||'',
     newName:s.name,newCode:s.code,newL:s.L,newT:s.T,newP:s.P,newCredits:s.credits,basket:s.basket,term:c.term,
     type:(c.C===s.credits?'exact':'partial'),
     appliesTo:(student.currentBatch&&student.origBatch)?`${student.currentBatch} PRC ← ${student.origBatch} PRC`:'Smart-matched',
@@ -5883,6 +5903,7 @@ function autoMapByCode(onlyIds){
   if(!chips.length){toast(idSet?'The uploaded sheet(s) had nothing new to map':'Pool has no unmapped courses to auto-map','info');return;}
   let made=0,skip=0;
   chips.forEach(c=>{
+    if(!canMapChipByMarks(c)){skip++;return;}
     const key=(c.code||'').toUpperCase();
     let s=key?subjects.find(x=>!x.additional&&(x.code||'').toUpperCase()===key&&!equivalences.some(e=>e.subjectId===x.id)):null;
     if(!s){
@@ -5891,7 +5912,7 @@ function autoMapByCode(onlyIds){
     }
     if(!s){skip++;return;}
     const eq={id:nextEquivId++,subjectId:s.id,
-      oldName:c.name,oldCode:c.code,oldL:c.L,oldT:c.T,oldP:c.P,oldCredits:c.C,
+      oldName:c.name,oldCode:c.code,oldL:c.L,oldT:c.T,oldP:c.P,oldCredits:c.C,oldGrade:c.grade||'',
       newName:s.name,newCode:s.code,newL:s.L,newT:s.T,newP:s.P,newCredits:s.credits,
       basket:s.basket,term:c.term,
       type:(c.C===s.credits?'exact':'partial'),
