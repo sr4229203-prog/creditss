@@ -4403,7 +4403,8 @@ function commitImport(){
     if(newIds.length)setTimeout(()=>{autoMapByCode(newIds);if(libSettings.autoApply)libApplyToCurrent(true);},80);   // map ONLY what was just uploaded — given entries stay untouched
     return;
   }
-  const mode=(document.querySelector('input[name="dupMode"]:checked')||{}).value||'skip';
+  let mode=(document.querySelector('input[name="dupMode"]:checked')||{}).value||'skip';
+  if(window.__forceDupMode){mode=window.__forceDupMode;delete window.__forceDupMode;}
   let added=0,updated=0,skipped=0;
   const clean=s=>{const c={...s};delete c.__hasBasket;delete c.__hasType;delete c.__hasSem;return c;};
   importRows.forEach(r=>{
@@ -5170,12 +5171,23 @@ function marksHandleFiles(files,slotIdx){
   if(!list.length)return;
   let pending=list.length,firstPdf=null;
   const done=()=>{
-    if(--pending)return;
-    renderMarksPage();saveState();
+    // render progress after each file parsed so the UI stays fresh
+    renderMarksPage();
+    if(--pending>0){
+      saveState();
+      return;
+    }
+    // final completion
+    saveState();
     const __db=document.getElementById('marksDoneBadge');
     if(__db){__db.style.display='inline-block';__db.textContent='✓ Uploaded — '+marksData.filter(d=>d.courses.length).length+' sheet(s)';}
     // do NOT auto-open the PDF in an iframe — a large/odd PDF in the browser plugin can freeze the tab.
     if(firstPdf!==null){const d2=marksData[firstPdf];if(d2)toast('✓ '+(d2.file||'sheet')+' parsed — '+(d2.courses?d2.courses.length:0)+' course(s). Commit to split.','success');}
+    // If user enabled auto-commit, proceed to commit & map now
+    try{
+      const autoCommit = localStorage.getItem('marks.autoCommit')==='1';
+      if(autoCommit) setTimeout(()=>marksCommitAll(),120);
+    }catch(e){}
   };
   list.forEach(f=>{
     const nm=(f.name||'').toLowerCase();
@@ -5274,10 +5286,19 @@ function marksCommitAll(){
   const objs=all.map(c=>({Code:c.code,Name:c.name,Semester:c.sem||'',Credits:c.credits,Grade:c.grade,Term:c.term||''}));
   importMode=marksTarget;
   importRows=rowsFromObjects(objs);
-  if(marksTarget==='register'){
-    const up=document.querySelector('input[name="dupMode"][value="update"]');
-    if(up)up.checked=true;
-  }
+  // apply user preferences: auto-update duplicates and auto-commit
+  try{
+    const autoUpd = localStorage.getItem('marks.autoUpdate')==='1';
+    const autoCommit = localStorage.getItem('marks.autoCommit')==='1';
+    if(autoUpd && marksTarget==='register'){
+      // prefer update mode for duplicates
+      const up=document.querySelector('input[name="dupMode"][value="update"]');
+      if(up)up.checked=true;else window.__forceDupMode='update';
+    }
+    if(autoCommit){
+      // proceed without any preview / extra prompts — commitImport() handles importRows directly
+    }
+  }catch(e){}
   const __committedCodes=all.map(c=>(c.code||'').toUpperCase()).filter(Boolean);
   const __committedGrades={};all.forEach(c=>{if(c.code)__committedGrades[c.code.toUpperCase()]=String(c.grade||'').toUpperCase();});
   commitImport();
@@ -5447,10 +5468,14 @@ function renderMarksPage(){
     ${all.map(c=>`<tr><td class="mono">${c.sem?('S'+c.sem):'—'}</td><td class="mono">${c.code}</td><td>${c.name}</td><td class="mono">${c.credits}</td><td class="mono" style="font-weight:600;color:${(c.grade==='F'||c.grade==='NP')?'var(--red)':'var(--green)'}">${c.grade}</td><td style="font-size:10.5px">${c.term||'—'}</td></tr>`).join('')}
     </tbody></table></div></div>`:'';
   const bar=document.getElementById('marksBar');
+  const autoUpd = localStorage.getItem('marks.autoUpdate')==='1';
+  const autoCommit = localStorage.getItem('marks.autoCommit')==='1';
   bar.innerHTML=`<span style="font-size:12px;font-weight:600">🎯 Send parsed courses to:</span>
     <label style="font-size:12px;display:flex;align-items:center;gap:5px"><input type="radio" name="marksTarget" ${marksTarget==='pool'?'checked':''} onchange="marksTarget='pool'" style="accent-color:var(--accent)"/> Old-PRC pool (auto-maps Table I)</label>
     <label style="font-size:12px;display:flex;align-items:center;gap:5px"><input type="radio" name="marksTarget" ${marksTarget==='register'?'checked':''} onchange="marksTarget='register'" style="accent-color:var(--accent)"/> Register (merge marks into the plan)</label>
     <span style="flex:1"></span>
+    <label style="font-size:12px;display:flex;align-items:center;gap:8px;margin-right:8px"><input type="checkbox" id="marksAutoUpdate" ${autoUpd?"checked":""} onchange="(v=>{localStorage.setItem('marks.autoUpdate',v? '1':'0');toast('Auto-update duplicates '+(v?'enabled':'disabled'),'info');})(this.checked)" style="accent-color:var(--accent)"/> Auto-update duplicates</label>
+    <label style="font-size:12px;display:flex;align-items:center;gap:8px;margin-right:10px"><input type="checkbox" id="marksAutoCommit" ${autoCommit?"checked":""} onchange="(v=>{localStorage.setItem('marks.autoCommit',v? '1':'0');toast('Auto-commit on upload '+(v?'enabled':'disabled'),'info');})(this.checked)" style="accent-color:var(--accent)"/> Don't ask — auto-commit</label>
     <button class="btn btn-green" onclick="marksCommitAll()" ${all.length?'':'disabled'}>➜ Commit &amp; Map (${all.length})</button>`;
 }
 
