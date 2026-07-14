@@ -5180,6 +5180,8 @@ function marksHandleFiles(files,slotIdx){
     }
     // final completion
     saveState();
+    // refresh dashboard & annexure UI so uploaded sheets are visible immediately
+    try{ renderAll(); renderAnnexureForm(); renderAnnexSources(); renderDashAnnexure(); }catch(e){}
     const __db=document.getElementById('marksDoneBadge');
     if(__db){__db.style.display='inline-block';__db.textContent='✓ Uploaded — '+marksData.filter(d=>d.courses.length).length+' sheet(s)';}
     // do NOT auto-open the PDF in an iframe — a large/odd PDF in the browser plugin can freeze the tab.
