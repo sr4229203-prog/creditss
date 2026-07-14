@@ -1580,6 +1580,9 @@ body{background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans',sans-seri
           <input class="form-input" id="s-expected-grad" type="number" min="1980" max="2099" placeholder="e.g. 2027"/>
         </div>
       </div>
+      <div style="margin-top:10px">
+        <label style="font-weight:600"><input type="checkbox" id="s-clear-on-save" style="margin-right:8px"/> Create fresh profile — clear uploaded marks, old-PRC pool, mappings and register</label>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeStudentModal()">Cancel</button>
@@ -3346,6 +3349,8 @@ function saveStudent(){
   student.backlogYear=document.getElementById('s-backlog-year').value.trim();
   student.currentBatch=document.getElementById('s-current-batch').value.trim();
   student.expectedGrad=document.getElementById('s-expected-grad').value.trim();
+  const clearFlag = document.getElementById('s-clear-on-save') && document.getElementById('s-clear-on-save').checked;
+  if(clearFlag){ if(!confirm('Clear all uploaded marks, old-PRC pool, mappings and register for a fresh profile? This cannot be undone.')){ /* continue without clearing */ } else { clearAllData(); } }
   closeStudentModal();
   renderStudentCard();
   renderDashboardBacklogBanner();
@@ -3354,6 +3359,26 @@ function saveStudent(){
   profilesSave();updateProfileChip();
   toast('Student profile saved','success');
   saveState();
+}
+
+function clearAllData(){
+  marksData = [];
+  oldPrcPool = [];
+  subjects = [];
+  equivalences = [];
+  attemptHistory = {};
+  activityLog = [];
+  annexRightSlots = [];
+  window.parsedMarksSelection = {};
+  undoStack = [];
+  redoStack = [];
+  __lastSnap = null;
+  nextId = 1;
+  nextEquivId = 1;
+  nextChipId = 1;
+  saveState();
+  renderAll();
+  toast('Cleared previous uploads and mappings — fresh profile created','info');
 }
 
 // ── SETTINGS ──────────────────────────────────────────────────────────────────
