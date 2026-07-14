@@ -4397,6 +4397,7 @@ function commitImport(){
     addPoolChipsFromRows(ok);
     const newIds=oldPrcPool.filter(c=>!beforeIds.has(c.id)).map(c=>c.id);
     if(window.__marksSrc){oldPrcPool.forEach(c=>{if(newIds.includes(c.id)&&window.__marksSrc[c.code||''])c.src=window.__marksSrc[c.code||''];});window.__marksSrc=null;}
+    refreshAllViews();
     closeImportModal();
     navTo('equivalence');switchEquivTab('board',document.querySelector('.subtab-btn[data-etab="board"]'));
     if(newIds.length)setTimeout(()=>{autoMapByCode(newIds);if(libSettings.autoApply)libApplyToCurrent(true);},80);   // map ONLY what was just uploaded — given entries stay untouched
@@ -4431,7 +4432,7 @@ function commitImport(){
     }
     subjects.push({id:nextId++,...clean(inc)});added++;
   });
-  renderAll();saveState();closeImportModal();
+  saveState();refreshAllViews();closeImportModal();
   logAction('📥',`Import: ${added} added · ${updated} updated · ${skipped} skipped`);
   toast(`Import finished — ${added} added, ${updated} updated, ${skipped} skipped`,'success');
   if((added+updated)>0&&importRows.some(r=>r.status!=='err'&&r.sub.grade)){
@@ -5281,10 +5282,12 @@ function marksCommitAll(){
   const __committedGrades={};all.forEach(c=>{if(c.code)__committedGrades[c.code.toUpperCase()]=String(c.grade||'').toUpperCase();});
   commitImport();
   marksClearAll();
+  refreshAllViews();
   setTimeout(()=>{marksSplitSummary(__committedCodes,__committedGrades);},260);
 }
 // v6.1: after upload, split each course into the right Annexure table BY GRADE
 function marksSplitSummary(codes,grades){
+  refreshAllViews();
   const set=new Set(codes);
   const cls=annexureClassify();
   const r=settings.readmitSem||0;
@@ -6389,6 +6392,32 @@ function debounce(key,fn,ms){if(__deb[key])clearTimeout(__deb[key]);__deb[key]=s
 let __raf=null;
 function renderAllSoon(){ if(__raf)return; __raf=(w=>typeof requestAnimationFrame!=='undefined'?requestAnimationFrame:(f=>setTimeout(f,16)))()(()=>{__raf=null;renderAll();}); }
 let __rendering=false;
+function refreshAllViews(){
+  renderAll();
+  renderBacklogPage();
+  renderBoard();
+  renderSubjectTable();
+  renderDashAnnexure();
+  renderEquivKPI();
+  renderEquivBoard();
+  renderEquivTable();
+  renderEquivReport();
+  renderRequirements();
+  renderAnalytics();
+  renderBalancerPage();
+  renderAnnexureForm();
+  renderMarksStatus();
+  renderMarksPage();
+  renderCatalogInit();
+  renderLibrary();
+  renderBatchList();
+  renderReconcile();
+  renderProfileList();
+  renderLogModal();
+  updateUndoButtons();
+  updateProfileChip();
+  applySettingsToUI();
+}
 function renderAll(){
   if(__rendering)return;                 // hard guard: renderAll can never re-enter itself
   __rendering=true;
