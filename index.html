@@ -5969,6 +5969,22 @@ function renderDashAnnexure(){
       <div class="bal-verdict-box ${ok?'ok':'over'}" style="margin:0">${ok?'✓':'⚠'}&nbsp; ${ok?`Consistent — B+C+D+E+F = ${sum.total} ≥ A (${sum.A})`:`Short by ${sum.A-sum.total} credit(s) — total ${sum.total} < A (${sum.A})`}</div>
     </div>
   </div>`;
+  // add parsed marks semester-wise panel beneath the Annexure summary
+  try{
+    const parsedWrap=document.createElement('div'); parsedWrap.style.marginTop='10px';
+    parsedWrap.className='report-card';
+    const parsedHead=document.createElement('div'); parsedHead.className='report-card-head';
+    parsedHead.innerHTML=`<div><div class="report-card-title">📑 Parsed marks — semester-wise</div>
+      <div class="report-card-sub">Courses parsed from uploaded marksheets (click to add to PRC)</div></div>`;
+    parsedWrap.appendChild(parsedHead);
+    const parsedBody=document.createElement('div'); parsedBody.style.padding='10px';
+    const md={}; if(typeof marksData!=='undefined'&&Array.isArray(marksData)){marksData.forEach(slot=>{(slot.courses||[]).forEach(c=>{const s=c.sem||'Unk'; (md[s]=md[s]||[]).push(Object.assign({},c,{source:slot.file||''}));});});}
+    const semKeys=Object.keys(md).sort((a,b)=>{if(a==='Unk')return 1;if(b==='Unk')return -1;return (+a)-(+b);});
+    if(semKeys.length){ semKeys.forEach(sk=>{ const h=document.createElement('div'); h.style.fontWeight='700'; h.style.margin='6px 0 4px'; h.textContent=(sk==='Unk'?'Unassigned Semester':'Semester '+sk); parsedBody.appendChild(h); md[sk].forEach(c=>{ const row=document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; row.style.alignItems='center'; row.style.padding='6px 0'; row.innerHTML=`<div><div style="font-weight:700">${c.code||''}</div><div style="font-size:12px;color:var(--ink4)">${c.name||''} <small style="color:var(--ink4)">· ${c.source||''}</small></div></div>`; const btn=document.createElement('button'); btn.className='btn btn-sm'; btn.textContent='Add to PRC'; btn.onclick=()=>addParsedCourseToRegister({code:c.code||'',name:c.name||'',sem:+sk||activeSem,credits:c.credits||4}); row.appendChild(btn); parsedBody.appendChild(row); }); }); }
+    else{ parsedBody.innerHTML='<div style="font-size:12px;color:var(--ink4)">No parsed courses found — upload marks to populate this list.</div>'; }
+    parsedWrap.appendChild(parsedBody);
+    box.appendChild(parsedWrap);
+  }catch(e){console.warn('renderDashAnnexure parsed panel',e)}
 }
 
 // ── v5: STUDENT PROFILES (multi-student, offline) ─────────────────────────────
