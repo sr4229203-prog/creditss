@@ -5188,6 +5188,8 @@ function marksHandleFiles(files,slotIdx){
       if(goto==='dashboard') navTo('dashboard');
       else if(goto==='annexure') navTo('annexure');
     }catch(e){}
+    // optionally auto-open the Course Mapper
+    try{ if(localStorage.getItem('marks.openMapper')==='1'){ try{ populateMapperFromMarks(); openMappingModal(); }catch(e){} } }catch(e){}
     const __db=document.getElementById('marksDoneBadge');
     if(__db){__db.style.display='inline-block';__db.textContent='✓ Uploaded — '+marksData.filter(d=>d.courses.length).length+' sheet(s)';}
     // do NOT auto-open the PDF in an iframe — a large/odd PDF in the browser plugin can freeze the tab.
@@ -5530,6 +5532,7 @@ function renderMarksPage(){
   const autoAddSem = localStorage.getItem('marks.autoAdd.sem')||'all';
   const autoAddSource = localStorage.getItem('marks.autoAdd.source')||'';
   const marksGoto = localStorage.getItem('marks.goto')||'none';
+  const openMapper = localStorage.getItem('marks.openMapper')==='1';
   bar.innerHTML=`<span style="font-size:12px;font-weight:600">🎯 Send parsed courses to:</span>
     <label style="font-size:12px;display:flex;align-items:center;gap:5px"><input type="radio" name="marksTarget" ${marksTarget==='pool'?'checked':''} onchange="marksTarget='pool'" style="accent-color:var(--accent)"/> Old-PRC pool (auto-maps Table I)</label>
     <label style="font-size:12px;display:flex;align-items:center;gap:5px"><input type="radio" name="marksTarget" ${marksTarget==='register'?'checked':''} onchange="marksTarget='register'" style="accent-color:var(--accent)"/> Register (merge marks into the plan)</label>
@@ -5553,6 +5556,7 @@ function renderMarksPage(){
         <option value="annexure" ${marksGoto==='annexure'?'selected':''}>Annexure</option>
       </select>
     </label>
+    <label style="font-size:12px;display:flex;align-items:center;gap:8px;margin-right:10px"><input type="checkbox" id="marksOpenMapper" ${openMapper?"checked":""} onchange="(v=>{localStorage.setItem('marks.openMapper',v? '1':'0');toast('Auto-open mapper '+(v?'enabled':'disabled'),'info');})(this.checked)" style="accent-color:var(--accent)"/> Auto-open mapper</label>
     <button class="btn btn-green" onclick="marksCommitAll()" ${all.length?'':'disabled'}>➜ Commit &amp; Map (${all.length})</button>`;
 }
 
