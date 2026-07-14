@@ -5173,6 +5173,7 @@ function marksHandleFiles(files,slotIdx){
   const done=()=>{
     // render progress after each file parsed so the UI stays fresh
     renderMarksPage();
+      try{ if(typeof populateMapperFromMarks==='function') populateMapperFromMarks(); }catch(e){}
     if(--pending>0){
       saveState();
       return;
@@ -5188,6 +5189,24 @@ function marksHandleFiles(files,slotIdx){
       const autoCommit = localStorage.getItem('marks.autoCommit')==='1';
       if(autoCommit) setTimeout(()=>marksCommitAll(),120);
     }catch(e){}
+    // If user enabled auto-add, add parsed courses to PRC register (with confirmation for large batches)
+    try{
+      const autoAdd = localStorage.getItem('marks.autoAdd')==='1';
+      if(autoAdd){
+        const semFilter = localStorage.getItem('marks.autoAdd.sem')||'all';
+        const sourceFilter = (localStorage.getItem('marks.autoAdd.source')||'').toLowerCase();
+        const all = marksData.flatMap(d=> (d.courses||[]).map(c=>({code:c.code||'',name:c.name||'',sem:c.sem||activeSem,credits:c.credits||4,source:d.file||''}))).filter(c=>c.name||c.code);
+        // apply semester/source filters
+        const filtered = all.filter(c=>{ if(semFilter!=='all' && String(c.sem)!==String(semFilter)) return false; if(sourceFilter && !(String(c.source||'').toLowerCase().includes(sourceFilter))) return false; return true; });
+        // filter out courses already present (match code+sem)
+        const candidates = filtered.filter(c=>!subjects.some(s=> (c.code && s.code && s.code.toUpperCase()===c.code.toUpperCase()) && (s.sem==c.sem) ));
+        if(candidates.length){
+          const threshold = 6;
+          if(candidates.length>threshold){ openAutoAddConfirm(candidates); }
+          else{ performAutoAdd(candidates); }
+        }
+      }
+    }catch(e){console.warn('auto-add error',e)}
   };
   list.forEach(f=>{
     const nm=(f.name||'').toLowerCase();
@@ -5499,13 +5518,47 @@ function renderMarksPage(){
   const bar=document.getElementById('marksBar');
   const autoUpd = localStorage.getItem('marks.autoUpdate')==='1';
   const autoCommit = localStorage.getItem('marks.autoCommit')==='1';
+  const autoAdd = localStorage.getItem('marks.autoAdd')==='1';
+  const autoAddSem = localStorage.getItem('marks.autoAdd.sem')||'all';
+  const autoAddSource = localStorage.getItem('marks.autoAdd.source')||'';
   bar.innerHTML=`<span style="font-size:12px;font-weight:600">🎯 Send parsed courses to:</span>
     <label style="font-size:12px;display:flex;align-items:center;gap:5px"><input type="radio" name="marksTarget" ${marksTarget==='pool'?'checked':''} onchange="marksTarget='pool'" style="accent-color:var(--accent)"/> Old-PRC pool (auto-maps Table I)</label>
     <label style="font-size:12px;display:flex;align-items:center;gap:5px"><input type="radio" name="marksTarget" ${marksTarget==='register'?'checked':''} onchange="marksTarget='register'" style="accent-color:var(--accent)"/> Register (merge marks into the plan)</label>
     <span style="flex:1"></span>
     <label style="font-size:12px;display:flex;align-items:center;gap:8px;margin-right:8px"><input type="checkbox" id="marksAutoUpdate" ${autoUpd?"checked":""} onchange="(v=>{localStorage.setItem('marks.autoUpdate',v? '1':'0');toast('Auto-update duplicates '+(v?'enabled':'disabled'),'info');})(this.checked)" style="accent-color:var(--accent)"/> Auto-update duplicates</label>
+    <label style="font-size:12px;display:flex;align-items:center;gap:8px;margin-right:8px"><input type="checkbox" id="marksAutoAdd" ${autoAdd?"checked":""} onchange="(v=>{localStorage.setItem('marks.autoAdd',v? '1':'0');toast('Auto-add parsed courses '+(v?'enabled':'disabled'),'info');})(this.checked)" style="accent-color:var(--accent)"/> Auto-add to PRC</label>
+    <label style="font-size:12px;display:flex;align-items:center;gap:8px;margin-right:8px">Sem filter
+      <select id="marksAutoAddSem" style="margin-left:6px" onchange="(v=>{localStorage.setItem('marks.autoAdd.sem',this.value);toast('Auto-add semester filter: '+this.value,'info');}).call(this);">
+        <option value="all" ${autoAddSem==='all'?'selected':''}>All</option>
+        ${[1,2,3,4,5,6,7,8].map(n=>`<option value="${n}" ${String(autoAddSem)===String(n)?'selected':''}>Sem ${n}</option>`).join('')}
+      </select>
+    </label>
+    <label style="font-size:12px;display:flex;align-items:center;gap:8px;margin-right:8px">Source filter
+      <input id="marksAutoAddSource" placeholder="filename contains…" value="${autoAddSource}" style="margin-left:6px;padding:4px;font-size:12px" onblur="localStorage.setItem('marks.autoAdd.source',this.value);"/>
+    </label>
     <label style="font-size:12px;display:flex;align-items:center;gap:8px;margin-right:10px"><input type="checkbox" id="marksAutoCommit" ${autoCommit?"checked":""} onchange="(v=>{localStorage.setItem('marks.autoCommit',v? '1':'0');toast('Auto-commit on upload '+(v?'enabled':'disabled'),'info');})(this.checked)" style="accent-color:var(--accent)"/> Don't ask — auto-commit</label>
     <button class="btn btn-green" onclick="marksCommitAll()" ${all.length?'':'disabled'}>➜ Commit &amp; Map (${all.length})</button>`;
+}
+
+function openAutoAddConfirm(candidates){
+  const ov=document.getElementById('autoAddConfirmOverlay');
+  const body=document.getElementById('autoAddConfirmBody');
+  body.innerHTML='';
+  const info=document.createElement('div'); info.style.marginBottom='8px'; info.innerHTML=`<div style="font-weight:700;margin-bottom:6px">${candidates.length} parsed course(s) will be added to the PRC register</div>
+    <div style="font-size:13px;color:var(--ink4)">Review the items below and choose Proceed to add them to the register. They will be assigned new IDs and saved.</div>`;
+  body.appendChild(info);
+  const list=document.createElement('div'); list.style.display='grid'; list.style.gridTemplateColumns='1fr 120px'; list.style.gap='6px';
+  candidates.forEach(c=>{ const d1=document.createElement('div'); d1.innerHTML=`<div style="font-weight:700">${c.code||''}</div><div style="font-size:13px;color:var(--ink4)">${c.name||''}</div>`; const d2=document.createElement('div'); d2.style.textAlign='right'; d2.innerHTML=`<div style="font-size:13px;color:var(--ink4)">Sem ${c.sem||'?'}</div>`; list.appendChild(d1); list.appendChild(d2); });
+  body.appendChild(list);
+  ov.classList.add('open');
+  const btn=document.getElementById('autoAddConfirmProceed');
+  btn.onclick=()=>{ performAutoAdd(candidates); closeAutoAddConfirm(); };
+}
+function closeAutoAddConfirm(){document.getElementById('autoAddConfirmOverlay').classList.remove('open');}
+function performAutoAdd(candidates){
+  let added=0;
+  candidates.forEach(c=>{ try{ addParsedCourseToRegister(c); added++; }catch(e){} });
+  saveState(); renderAll(); toast('Added '+added+' parsed course(s) to PRC register','success');
 }
 
 // ── v5.4: DRAG FROM ANY PAGE → ANNEXURE (nav drop) + 🗑 REMOVE ────────────────
@@ -5563,15 +5616,24 @@ function renderAnnexSources(){
   oldPrcPool.forEach(c=>{if(c.src){(map[c.src]=map[c.src]||{n:0,mapped:0,cr:0});map[c.src].n++;if(c.mappedEq)map[c.src].mapped++;map[c.src].cr+=Number(c.C||0)||0;}});
   const keys=Object.keys(map);
   if(!keys.length){box.innerHTML='';return;}
-  box.innerHTML=`<div class="report-card" style="margin-bottom:12px"><div class="report-card-head"><div>
-    <div class="report-card-title">📑 Source marks sheets — ${keys.length}</div>
+  // also show parsed marks (per-semester) for quick add
+  const parsed=document.createElement('div'); parsed.className='report-card'; parsed.style.marginBottom='12px';
+  const parsedHead=document.createElement('div'); parsedHead.className='report-card-head';
+  parsedHead.innerHTML=`<div><div class="report-card-title">📑 Source marks sheets — ${keys.length}</div>
     <div class="report-card-sub">Uploaded grade cards feeding this Annexure · click a sheet to filter the tray to it</div></div>
-    <button class="btn btn-secondary btn-sm" onclick="navTo('marks')">＋ Upload more</button></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">${keys.map(k=>`
-      <span class="src-pill" onclick="poolSheetFilter='${k.replace(/'/g,"\\'")}';poolStatusFilter='all';renderAnnexureForm()" title="Filter tray to this sheet">
-        📄 ${k} <b>${map[k].mapped}/${map[k].n}</b> mapped · ${map[k].cr} cr</span>`).join('')}
-      ${poolSheetFilter!=='all'?`<span class="src-pill" style="background:var(--surface2)" onclick="poolSheetFilter='all';renderAnnexureForm()">✕ clear filter</span>`:''}
-    </div></div>`;
+    <button class="btn btn-secondary btn-sm" onclick="navTo('marks')">＋ Upload more</button>`;
+  parsed.appendChild(parsedHead);
+  const pills=document.createElement('div'); pills.style.display='flex'; pills.style.gap='8px'; pills.style.flexWrap='wrap';
+  keys.forEach(k=>{ const sp=document.createElement('span'); sp.className='src-pill'; sp.title='Filter tray to this sheet'; sp.innerHTML=`📄 ${k} <b>${map[k].mapped}/${map[k].n}</b> mapped · ${map[k].cr} cr`; sp.onclick=()=>{poolSheetFilter=k;poolStatusFilter='all';renderAnnexureForm();}; pills.appendChild(sp); });
+  if(poolSheetFilter!=='all'){ const sp=document.createElement('span'); sp.className='src-pill'; sp.style.background='var(--surface2)'; sp.innerHTML='✕ clear filter'; sp.onclick=()=>{poolSheetFilter='all';renderAnnexureForm();}; pills.appendChild(sp); }
+  parsed.appendChild(pills);
+  // parsed marks quick-add
+  const parsedMarks=document.createElement('div'); parsedMarks.style.padding='10px'; parsedMarks.style.borderTop='1px dashed var(--border)';
+  const md={}; if(typeof marksData!=='undefined'&&Array.isArray(marksData)){marksData.forEach(slot=>{(slot.courses||[]).forEach(c=>{const s=c.sem||'Unk'; (md[s]=md[s]||[]).push(c);});});}
+  const semKeys=Object.keys(md).sort((a,b)=>{if(a==='Unk')return 1;if(b==='Unk')return -1;return (+a)-(+b);});
+  if(semKeys.length){ semKeys.forEach(sk=>{ const h=document.createElement('div'); h.style.fontWeight='700'; h.style.margin='6px 0 4px'; h.textContent=(sk==='Unk'?'Unassigned Semester':'Semester '+sk); parsedMarks.appendChild(h); md[sk].forEach(c=>{ const row=document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; row.style.alignItems='center'; row.style.padding='6px 0'; row.innerHTML=`<div><div style="font-weight:700">${c.code||''}</div><div style="font-size:12px;color:var(--ink4)">${c.name||''}</div></div>`; const btn=document.createElement('button'); btn.className='btn btn-sm'; btn.textContent='Add to PRC'; btn.onclick=()=>addParsedCourseToRegister({code:c.code||'',name:c.name||'',sem:+sk||activeSem,credits:c.credits||4}); row.appendChild(btn); parsedMarks.appendChild(row); }); }); } else { parsedMarks.innerHTML='<div style="font-size:12px;color:var(--ink4)">No parsed courses available — upload marks to see parsed rows here.</div>'; }
+  parsed.appendChild(parsedMarks);
+  box.innerHTML=''; box.appendChild(parsed);
 }
 function renderAnnexureForm(){
   const paper=document.getElementById('annexPaper'),tray=document.getElementById('annTray');
@@ -6567,6 +6629,175 @@ updateUndoButtons();
   <div id="gcatList" style="overflow-y:auto;flex:1"></div>
   <div id="gcatCount" style="font-size:10px;color:var(--ink4);margin-top:6px;text-align:center"></div>
 </div>
+
+<!-- Floating mapper button -->
+<button id="mapFab" class="chip-src" style="position:fixed;left:18px;bottom:18px;z-index:902" onclick="openMappingModal()">🧭 Map Courses</button>
+
+<!-- Course Mapper Modal -->
+<div class="modal-overlay" id="mappingOverlay">
+  <div class="modal wide">
+    <div class="modal-header"><div class="modal-title">Course Mapper</div><button class="modal-close" onclick="closeMappingModal()">✕</button></div>
+    <div class="modal-body" style="display:flex;gap:12px">
+      <div style="flex:1">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <b>Uploaded Marksheet (Left)</b>
+          <button class="btn btn-sm" onclick="loadLeftFromPage()">Load from page</button>
+        </div>
+        <div id="marksheetCourses" style="max-height:50vh;overflow:auto;border:1px solid var(--border);padding:8px;border-radius:8px"></div>
+      </div>
+      <div style="width:360px;display:flex;flex-direction:column;gap:8px">
+        <div><b>PRC / New Courses (Right)</b></div>
+        <div id="prcCourses" style="max-height:34vh;overflow:auto;border:1px solid var(--border);padding:8px;border-radius:8px"></div>
+        <div style="border-top:1px dashed var(--border);padding-top:8px">
+          <div style="display:flex;gap:8px;margin-bottom:6px">
+            <input id="newCourseCode" class="form-input" placeholder="Course code" style="flex:1;height:34px"/>
+            <input id="newCourseName" class="form-input" placeholder="Course name" style="flex:2;height:34px"/>
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end">
+            <button class="btn btn-secondary btn-sm" onclick="addExtraCourse()">Add to PRC</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+          <!-- Auto-add confirmation modal -->
+          <div class="modal-overlay" id="autoAddConfirmOverlay">
+            <div class="modal" style="max-width:760px;width:94vw">
+              <div class="modal-header"><div class="modal-title">Add parsed courses to PRC — confirm</div><button class="modal-close" onclick="closeAutoAddConfirm()">✕</button></div>
+              <div class="modal-body" id="autoAddConfirmBody" style="max-height:54vh;overflow:auto"></div>
+              <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeAutoAddConfirm()">Cancel</button>
+                <button class="btn btn-primary" id="autoAddConfirmProceed">Proceed &amp; Add</button>
+              </div>
+            </div>
+          </div>
+
+    <div class="modal-footer">
+      <div style="flex:1"><small style="color:var(--ink4)">Drag a left item onto a right item to map. Mappings appear below.</small></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary" onclick="closeMappingModal()">Close</button>
+      </div>
+    </div>
+    <div style="padding:12px;border-top:1px solid var(--border)">
+      <b style="display:block;margin-bottom:8px">Mappings</b>
+      <div id="mappingPairs" style="min-height:64px;max-height:18vh;overflow:auto;border:1px solid var(--border);padding:8px;border-radius:8px"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+function openMappingModal(){document.getElementById('mappingOverlay').classList.add('open')}
+function closeMappingModal(){document.getElementById('mappingOverlay').classList.remove('open')}
+function createCourseItem(course,containerId,side){
+  const el=document.createElement('div');
+  el.className='acat-row';
+  el.draggable=true;
+  el.dataset.course=JSON.stringify(course);
+  const ico = side==='left' ? '📥' : '📚';
+  el.innerHTML=`<div style="font-weight:700">${ico} ${(course.code||'')}</div><div style="font-size:12px;color:var(--ink4)">${(course.name||'')}</div>`;
+  el.title = `${course.code||''} — ${course.name||''}${course.sem?(' · Sem '+course.sem):''}`;
+  el.addEventListener('dragstart',e=>{
+    e.dataTransfer.setData('application/json',JSON.stringify({side:side,code:course.code,name:course.name}));
+    e.dataTransfer.effectAllowed='move';
+  });
+  el.addEventListener('dragover',e=>{e.preventDefault(); el.classList.add('dragover')});
+  el.addEventListener('dragleave',e=>el.classList.remove('dragover'));
+  document.getElementById(containerId).appendChild(el);
+  if(side==='right'){
+    el.addEventListener('dragover',e=>e.preventDefault());
+    el.addEventListener('drop',e=>{
+      e.preventDefault(); el.classList.remove('dragover');
+      try{const d=JSON.parse(e.dataTransfer.getData('application/json')||'{}'); if(d.side==='left'){addMapping(d,{code:course.code,name:course.name});}}
+      catch(err){console.warn(err)}
+    });
+  }
+}
+function loadLeftFromPage(){
+  const names=document.querySelectorAll('.sub-name');
+  const codes=document.querySelectorAll('.sub-code');
+  const left=document.getElementById('marksheetCourses');
+  left.innerHTML='';
+  if(names.length){
+    for(let i=0;i<names.length;i++){
+      const name=names[i].textContent.trim();
+      const code=(codes[i]&&codes[i].textContent.trim())||'';
+      createCourseItem({code:code,name:name},'marksheetCourses','left');
+    }
+    return;
+  }
+  const rows=document.querySelectorAll('.subject-table tr');
+  rows.forEach((r,idx)=>{ if(idx===0) return; const codeEl=r.querySelector('.sub-code'); const nameEl=r.querySelector('.sub-name'); if(nameEl){ createCourseItem({code:codeEl?codeEl.textContent.trim():'',name:nameEl.textContent.trim()},'marksheetCourses','left'); }});
+}
+function addExtraCourse(){
+  const code=document.getElementById('newCourseCode').value.trim();
+  const name=document.getElementById('newCourseName').value.trim();
+  if(!code && !name) return alert('Enter code or name');
+  createCourseItem({code, name},'prcCourses','right');
+  document.getElementById('newCourseCode').value='';document.getElementById('newCourseName').value='';
+}
+function addMapping(left,right){
+  const container=document.getElementById('mappingPairs');
+  const row=document.createElement('div');
+  row.style.display='flex';row.style.justifyContent='space-between';row.style.alignItems='center';row.style.padding='6px 8px';row.style.borderBottom='1px solid var(--bg2)';
+  row.innerHTML='<div><div style="font-weight:700">'+(left.code||'')+'</div><div style="font-size:12px;color:var(--ink4)">'+(left.name||'')+'</div></div><div style="text-align:right"><div style="font-weight:700">'+(right.code||'')+'</div><div style="font-size:12px;color:var(--ink4)">'+(right.name||'')+'</div></div>';
+  const rm=document.createElement('button');rm.className='btn btn-sm';rm.textContent='Remove';rm.style.marginLeft='12px';
+  rm.addEventListener('click',()=>row.remove());
+  row.appendChild(rm);
+  container.appendChild(row);
+  // Persist mapping as an equivalence entry
+  try{
+    // attempt to locate a matching subject for the right-hand PRC target
+    const subj = subjects.find(s=> (right.code && s.code && s.code.toUpperCase()=== (right.code||'').toUpperCase()) || (right.name && s.name && s.name===right.name));
+    const oldCredits = left.credits||0;
+    const newCredits = subj? (subj.credits||0) : (right.credits||0);
+    const eq={id:nextEquivId++, subjectId: subj?subj.id:null,
+      oldName:left.name||left.code, oldCode:(left.code||''), oldCredits:oldCredits,
+      newName:right.name||right.code, newCode:(right.code||''), newCredits:newCredits,
+      basket: subj? subj.basket : 'PC', term:left.sem||'',
+      type:(oldCredits && newCredits && oldCredits===newCredits)?'exact':'partial',
+      appliesTo:(student.currentBatch&&student.origBatch)?`${student.currentBatch} PRC ← ${student.origBatch} PRC`:'Mapped', remarks:''};
+    equivalences.push(eq);
+    logAction('🔗',`Mapped parsed ${left.code||left.name} ⇐ ${right.code||right.name}`);
+    toast(`Mapping saved: ${left.code||left.name} → ${right.code||right.name}`,'success');
+    renderEquivBoard();renderEquivKPI();renderEquivTable();renderEquivReport();saveState();
+  }catch(e){console.warn('Could not persist mapping',e)}
+}
+document.addEventListener('DOMContentLoaded',()=>{
+  // try to auto-load some right-side PRC items if present in page (catalog items or tags)
+  const cand=document.querySelectorAll('.gcat-row');
+  if(cand.length){ cand.forEach(function(n){ const code=n.querySelector('.sub-code')?n.querySelector('.sub-code').textContent.trim():n.textContent.trim().split('\n')[0]; const name=n.textContent.trim(); createCourseItem({code,name},'prcCourses','right'); }); }
+});
+
+// Populate the left mapper panel from parsed marks (semester grouped)
+function populateMapperFromMarks(){
+  const container=document.getElementById('marksheetCourses'); if(!container) return;
+  container.innerHTML='';
+  if(typeof marksData==='undefined' || !Array.isArray(marksData)) return;
+  const bySem={};
+  marksData.forEach(slot=>{(slot.courses||[]).forEach(c=>{const s=c.sem||'Unk'; (bySem[s]=bySem[s]||[]).push(c);});});
+  const keys=Object.keys(bySem).sort((a,b)=>{if(a==='Unk')return 1; if(b==='Unk')return -1; return (+a)-(+b);});
+  if(!keys.length){container.innerHTML='<div style="font-size:12px;color:var(--ink4)">No parsed courses yet — upload marksheets</div>';return}
+  keys.forEach(k=>{
+    const head=document.createElement('div'); head.style.fontWeight='700'; head.style.margin='8px 0 6px'; head.textContent=(k==='Unk'?'Unassigned Semester':'Semester '+k);
+    container.appendChild(head);
+    bySem[k].forEach(c=>{
+      createCourseItem({code:c.code||'',name:c.name||'',sem:k},'marksheetCourses','left');
+      // attach dblclick: add to PRC (open add modal prefilled)
+      const last=container.lastElementChild; if(last){ last.addEventListener('dblclick',()=>addParsedCourseToRegister({code:c.code||'',name:c.name||'',sem:+k||activeSem,credits:c.credits||4})); }
+    });
+  });
+}
+
+// Add parsed course directly into register / annexure (New PRC)
+function addParsedCourseToRegister(course){
+  if(!course||!course.name) return toast('No course name to add','error');
+  const obj={
+    id:nextId++, name:course.name, code:(course.code||'').toUpperCase(), credits:course.credits||4,
+    sem:course.sem||activeSem, type:'core', status:'completed', basket:'PC', L:'',T:'',P:'', term:'', additional:false
+  };
+  subjects.push(obj); saveState(); renderAll(); toast(`Added ${obj.code||obj.name} to register (S${obj.sem})`,'success');
+}
+</script>
 
 </body>
 </html>
